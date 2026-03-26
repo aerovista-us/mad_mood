@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Mad Mood Music — EchoVerse | An AeroVista Production</title>
+  <meta name="description" content="Mad Mood Music — a mobile-first EchoVerse album experience with immersive art, visualizer, and installable playback." />
+  <meta name="theme-color" content="#080b12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mad Mood Music" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./images/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="./images/icon-192.png" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06080d;
+      --bg-2: #0b0f16;
+      --panel: rgba(18, 24, 35, 0.72);
+      --panel-strong: rgba(12, 17, 26, 0.9);
+      --line: rgba(158, 183, 214, 0.14);
+      --line-strong: rgba(158, 183, 214, 0.22);
+      --text: #eef3ff;
+      --muted: #94a4bf;
+      --accent: #87b7ff;
+      --accent-2: #91ffe3;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      --radius: 24px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --header-h: 72px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at top, rgba(64, 91, 135, 0.2), transparent 40%), var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    body {
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    button, input[type="range"] { -webkit-tap-highlight-color: transparent; }
+
+    .bg-stage {
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(7, 10, 16, 0.6), rgba(4, 6, 10, 0.92));
+    }
+
+    .bg-layer {
+      position: absolute;
+      inset: -6%;
+      background-position: center;
+      background-size: cover;
+      filter: saturate(1.04) contrast(0.96) brightness(0.48) blur(0px);
+      transform: scale(1.06);
+      transition: opacity 900ms ease, transform 1400ms ease, filter 1200ms ease;
+      opacity: 0;
+    }
+
+    .bg-layer.active {
+      opacity: 1;
+      transform: scale(1.02);
+      filter: saturate(1.08) contrast(1) brightness(0.52);
+    }
+
+    .bg-overlay {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(5, 7, 11, 0.18), rgba(5, 7, 11, 0.74) 45%, rgba(5, 7, 11, 0.96)),
+        radial-gradient(circle at 50% 0%, rgba(135, 183, 255, 0.12), transparent 30%),
+        radial-gradient(circle at 100% 20%, rgba(145, 255, 227, 0.08), transparent 26%);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .page {
+      width: min(100%, 880px);
+      margin: 0 auto;
+      padding: calc(var(--safe-top) + 14px) 14px calc(var(--safe-bottom) + 112px);
+    }
+
+    .topbar {
+      position: sticky;
+      top: max(0px, var(--safe-top));
+      z-index: 20;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      align-items: center;
+      min-height: var(--header-h);
+      padding: 8px 0 12px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .eyebrow {
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .title {
+      font-size: clamp(1.32rem, 4vw, 2.15rem);
+      font-weight: 700;
+      line-height: 1.02;
+      margin: 0;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .chip-btn,
+    .icon-btn,
+    .primary-btn,
+    .ghost-btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-radius: 999px;
+      min-height: 42px;
+      padding: 0 14px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, opacity 160ms ease;
+      box-shadow: none;
+    }
+
+    .chip-btn:active,
+    .icon-btn:active,
+    .primary-btn:active,
+    .ghost-btn:active,
+    .track-card:active {
+      transform: scale(0.985);
+    }
+
+    .chip-btn[hidden] {
+      display: none;
+    }
+
+    .chip-btn.install-ready {
+      border-color: rgba(145, 255, 227, 0.28);
+      background: rgba(145, 255, 227, 0.08);
+      color: #dffff5;
+    }
+
+    .icon-btn {
+      width: 42px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      font-size: 1rem;
+    }
+
+    .hero {
+      margin-top: 8px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .art-shell {
+      position: relative;
+      border-radius: 30px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      aspect-ratio: 1 / 1.08;
+      max-height: 72vh;
+    }
+
+    .art-layer {
+      position: absolute;
+      inset: 0;
+      background-position: center;
+      background-size: cover;
+      opacity: 0;
+      transition: opacity 700ms ease, transform 1200ms ease;
+      transform: scale(1.04);
+    }
+
+    .art-layer.active {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .art-gradient {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(6,9,13,0.02), rgba(6,9,13,0.34) 48%, rgba(6,9,13,0.92)),
+        radial-gradient(circle at 18% 14%, rgba(135, 183, 255, 0.16), transparent 28%),
+        radial-gradient(circle at 85% 22%, rgba(145, 255, 227, 0.12), transparent 22%);
+      pointer-events: none;
+    }
+
+    .hero-meta {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.76rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(238, 243, 255, 0.72);
+    }
+
+    .hero-track-title {
+      margin: 0;
+      font-size: clamp(1.3rem, 5vw, 2.3rem);
+      line-height: 1.02;
+      font-weight: 750;
+      letter-spacing: -0.03em;
+    }
+
+    .hero-track-description {
+      margin: 0;
+      color: rgba(238, 243, 255, 0.86);
+      line-height: 1.45;
+      max-width: 52ch;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(238, 243, 255, 0.86);
+    }
+
+    .player-panel,
+    .section-card,
+    .track-card,
+    .about-sheet,
+    .toast {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+    }
+
+    .player-panel {
+      margin-top: 14px;
+      border-radius: 26px;
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .now-playing {
+      display: grid;
+      gap: 6px;
+    }
+
+    .now-playing .label {
+      font-size: 0.72rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .now-playing strong {
+      font-size: 1.02rem;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+    }
+
+    .seek-wrap {
+      display: grid;
+      gap: 8px;
+    }
+
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 32px;
+      margin: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), rgba(255,255,255,0.2));
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      margin-top: -7px;
+      border-radius: 50%;
+      background: white;
+      border: none;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 4px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), rgba(255,255,255,0.2));
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 0;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: 54px 1fr 54px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .primary-btn {
+      min-height: 54px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(145,255,227,0.18), rgba(135,183,255,0.14));
+      border-color: rgba(145,255,227,0.22);
+      font-weight: 700;
+    }
+
+    .ghost-btn {
+      min-height: 54px;
+      border-radius: 18px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+    }
+
+    .bottom-grid {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .section-card {
+      border-radius: 24px;
+      padding: 16px;
+    }
+
+    .section-title {
+      margin: 0 0 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .section-copy {
+      margin: 0;
+      line-height: 1.58;
+      color: rgba(238, 243, 255, 0.88);
+    }
+
+    .visualizer {
+      width: 100%;
+      height: 108px;
+      border-radius: 18px;
+      display: block;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .track-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .track-card {
+      width: 100%;
+      text-align: left;
+      border-radius: 22px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+    }
+
+    .track-card.active {
+      border-color: rgba(145,255,227,0.24);
+      background: rgba(145,255,227,0.07);
+    }
+
+    .track-card-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .track-index {
+      display: inline-grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.06);
+      color: rgba(238,243,255,0.88);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      flex: 0 0 auto;
+    }
+
+    .track-name {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .track-role {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .track-card p {
+      margin: 0;
+      color: rgba(238,243,255,0.84);
+      line-height: 1.45;
+      font-size: 0.92rem;
+    }
+
+    .track-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .sticky-mini {
+      position: fixed;
+      inset: auto 12px calc(var(--safe-bottom) + 12px) 12px;
+      z-index: 30;
+      border-radius: 20px;
+      padding: 10px 12px;
+      background: rgba(9, 13, 20, 0.92);
+      border: 1px solid var(--line-strong);
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sticky-mini[hidden] {
+      display: none;
+    }
+
+    .mini-text {
+      min-width: 0;
+    }
+
+    .mini-title,
+    .mini-sub {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mini-title {
+      font-weight: 700;
+      font-size: 0.94rem;
+    }
+
+    .mini-sub {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .mini-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mini-actions button {
+      min-width: 40px;
+      min-height: 40px;
+      border-radius: 14px;
+      padding: 0;
+    }
+
+    .about-sheet {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 40;
+      border-radius: 26px 26px 0 0;
+      background: rgba(7, 10, 15, 0.98);
+      padding: 18px 16px calc(var(--safe-bottom) + 18px);
+      transform: translateY(102%);
+      transition: transform 260ms ease;
+      max-height: min(78vh, 720px);
+      overflow: auto;
+    }
+
+    .about-sheet.open {
+      transform: translateY(0);
+    }
+
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 39;
+      background: rgba(0,0,0,0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease;
+    }
+
+    .sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet-handle {
+      width: 52px;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.16);
+      margin: 0 auto 14px;
+    }
+
+    .sheet-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sheet-title {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+
+    .sheet-copy {
+      color: rgba(238,243,255,0.86);
+      line-height: 1.6;
+      margin: 14px 0 0;
+    }
+
+    .about-grid {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .about-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .about-card h4 {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
+    }
+
+    .about-card p,
+    .about-card li {
+      margin: 0;
+      color: rgba(238,243,255,0.82);
+      line-height: 1.54;
+    }
+
+    .about-card ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 86px);
+      transform: translate(-50%, 18px);
+      z-index: 45;
+      padding: 11px 14px;
+      border-radius: 999px;
+      color: var(--text);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease, transform 220ms ease;
+      background: rgba(9,13,20,0.96);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+
+    @media (min-width: 760px) {
+      .page {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .hero {
+        grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+        align-items: stretch;
+      }
+      .art-shell {
+        aspect-ratio: auto;
+        min-height: 520px;
+      }
+      .player-panel {
+        margin-top: 0;
+        align-self: stretch;
+      }
+      .bottom-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .about-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-stage" aria-hidden="true">
+    <div class="bg-layer active" id="bg-layer-a"></div>
+    <div class="bg-layer" id="bg-layer-b"></div>
+    <div class="bg-overlay"></div>
+  </div>
+
+  <div class="page">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">EchoVerse | An AeroVista Production</div>
+        <h1 class="title">Mad Mood Music</h1>
+        <div class="subtitle">Mobile-first album player · installable PWA · art-led presentation</div>
+      </div>
+      <button class="chip-btn" id="install-btn" hidden type="button">Install</button>
+      <button class="icon-btn" id="about-btn" type="button" aria-label="About this album">i</button>
+    </header>
+
+    <main>
+      <section class="hero" aria-label="Album experience">
+        <div class="art-shell" id="art-shell">
+          <div class="art-layer active" id="art-layer-a"></div>
+          <div class="art-layer" id="art-layer-b"></div>
+          <div class="art-gradient"></div>
+          <div class="hero-meta">
+            <div class="hero-topline">
+              <span id="hero-track-number">Track 01</span>
+              <span id="hero-track-role">Opener and self-portrait</span>
+            </div>
+            <h2 class="hero-track-title" id="hero-track-title">Mad Mood Music</h2>
+            <p class="hero-track-description" id="hero-track-description">Establishes the man before the story widens: atmospheric, anti-polish, and drawn to songs with shadow, depth, and character.</p>
+            <div class="tags" id="hero-tags"></div>
+          </div>
+        </div>
+
+        <section class="player-panel" aria-label="Player controls">
+          <div class="now-playing">
+            <div class="label">Now playing</div>
+            <strong id="now-title">Mad Mood Music</strong>
+            <div id="now-subtitle" class="subtitle">Track 1 of 8</div>
+          </div>
+
+          <canvas class="visualizer" id="visualizer" width="1200" height="240" aria-label="Audio visualizer"></canvas>
+
+          <div class="controls">
+            <div class="seek-wrap">
+              <label class="sr-only" for="seek">Track position</label>
+              <input id="seek" type="range" min="0" max="100" step="0.1" value="0" />
+              <div class="time-row">
+                <span id="current-time">0:00</span>
+                <span id="duration">0:00</span>
+              </div>
+            </div>
+
+            <div class="button-row">
+              <button class="ghost-btn" id="prev-btn" type="button" aria-label="Previous track">⟨</button>
+              <button class="primary-btn" id="play-btn" type="button">Play Album</button>
+              <button class="ghost-btn" id="next-btn" type="button" aria-label="Next track">⟩</button>
+            </div>
+          </div>
+
+          <div class="section-card" style="padding:14px; border-radius:20px; background:rgba(255,255,255,0.03); box-shadow:none;">
+            <p class="section-title">Album concept</p>
+            <p class="section-copy" id="album-concept">
+              A portrait record built on taste, memory, standards, family legacy, and the dream of quiet peace — not false hardship mythology.
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <section class="bottom-grid" aria-label="Album details">
+        <article class="section-card">
+          <p class="section-title">Overall arc</p>
+          <p class="section-copy">
+            The record opens with identity, moves through memory and refinement, reveals its emotional center in pride for good kids, pushes back against polished counterfeit culture, then closes by drifting from abstraction into self-summary and finally into the earned exhale of Spain.
+          </p>
+        </article>
+
+        <article class="section-card">
+          <p class="section-title">Design cues</p>
+          <p class="section-copy">
+            Moody analog art-rock energy, vintage elegance, restrained luxury, dark-glass presentation, smooth motion, and lock-screen-ready playback with an install flow that feels native on mobile.
+          </p>
+        </article>
+      </section>
+
+      <section class="section-card" style="margin-top:14px;" aria-label="Track listing">
+        <p class="section-title">Track list</p>
+        <div class="track-list" id="track-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="sticky-mini" id="sticky-mini" hidden>
+    <div class="mini-text">
+      <div class="mini-title" id="mini-title">Mad Mood Music</div>
+      <div class="mini-sub" id="mini-sub">Track 1 of 8</div>
+    </div>
+    <div class="mini-actions">
+      <button class="ghost-btn" id="mini-prev" type="button" aria-label="Previous track">⟨</button>
+      <button class="primary-btn" id="mini-play" type="button" style="min-height:40px; min-width:88px;">Play</button>
+      <button class="ghost-btn" id="mini-next" type="button" aria-label="Next track">⟩</button>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <aside class="about-sheet" id="about-sheet" aria-hidden="true" aria-labelledby="about-heading">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-row">
+      <h3 class="sheet-title" id="about-heading">About EchoVerse | AeroVista</h3>
+      <button class="icon-btn" id="close-about" type="button" aria-label="Close about section">×</button>
+    </div>
+    <p class="sheet-copy">
+      EchoVerse is the album and sound-design lane inside AeroVista — built for immersive, story-first listening experiences that feel polished on mobile, lightweight on the web, and expressive enough to carry an album like a digital liner note, player, and presentation in one place.
+    </p>
+    <div class="about-grid">
+      <div class="about-card">
+        <h4>About this album</h4>
+        <p>
+          <strong>Mad Mood Music</strong> is a portrait of a man defined by taste, restraint, memory, standards, good kids, and a dream of retiring in Spain. The project works best as elegance and honesty rather than fake struggle.
+        </p>
+      </div>
+      <div class="about-card">
+        <h4>Playback behavior</h4>
+        <ul>
+          <li>Auto-plays the next track at the end of each song.</li>
+          <li>Saves your current track and timestamp locally for return visits.</li>
+          <li>Uses Media Session for lock-screen metadata and transport controls when supported.</li>
+          <li>Designed so playback can continue during screen-off or background use whenever the device/browser allows it.</li>
+        </ul>
+      </div>
+      <div class="about-card">
+        <h4>GitHub Pages ready</h4>
+        <p>
+          This build uses a static app shell, local asset paths, a manifest, and a service worker so it can deploy cleanly to GitHub Pages with no backend required.
+        </p>
+      </div>
+      <div class="about-card">
+        <h4>Swap in final assets</h4>
+        <p>
+          Put your MP3 files into <code>./audio</code> and art into <code>./images</code>. The page is already wired for 8 tracks and art transitions; replace the placeholders and go live.
+        </p>
+      </div>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <audio id="audio" preload="metadata" playsinline></audio>
+
+  <script>
+    const STORAGE_KEY = 'echoverse.mad-mood-music.state.v1';
+    const tracks = [
+      {
+        title: 'Mad Mood Music',
+        role: 'Opener and self-portrait',
+        description: 'Establishes who he is: anti-pop, anti-polish, drawn to depth, atmosphere, and songs with shadow and character.',
+        mood: 'private · tasteful · reflective',
+        concept: 'Identity track. A man explained by mood, restraint, and what he refuses to fake.',
+        src: './audio/01-mad-mood-music.mp3',
+        art: './images/track-01-mad-mood-music.svg',
+        tags: ['Atmospheric', 'Guarded', 'Anti-polish']
+      },
+      {
+        title: 'Seventy-Six',
+        role: 'Memory anchor',
+        description: 'Turns 1976 into emotional weather — warm, cinematic, glowing, and permanently threaded through the self.',
+        mood: 'wistful · cinematic · warm',
+        concept: 'Memory as atmosphere rather than fact. The year itself becomes a symbol.',
+        src: './audio/02-seventy-six.mp3',
+        art: './images/track-02-seventy-six.svg',
+        tags: ['Nostalgic', 'Warm', 'Cinematic']
+      },
+      {
+        title: 'Old ’55 Porsche',
+        role: 'Object of elegance',
+        description: 'Not a macho car song — a symbol of line, craft, old-world grace, and the kind of beauty that does not need to shout.',
+        mood: 'nocturnal · refined · composed',
+        concept: 'Craftsmanship and quiet glamour mirror the man himself.',
+        src: './audio/03-old-55-porsche.mp3',
+        art: './images/track-03-old-55-porsche.svg',
+        tags: ['Vintage', 'Refined', 'Nocturnal']
+      },
+      {
+        title: 'Good Kids',
+        role: 'Emotional core',
+        description: 'No fake darkness, no mythology — just modest, unshaken pride in having done one real thing right.',
+        mood: 'tender · honest · quietly proud',
+        concept: 'Legacy is the truest value on the entire record.',
+        src: './audio/04-good-kids.mp3',
+        art: './images/track-04-good-kids.svg',
+        tags: ['Legacy', 'Tender', 'Honest']
+      },
+      {
+        title: 'Not That Kind of Country',
+        role: 'Standards statement',
+        description: 'He does not reject roots or dust — he rejects the polished counterfeit version sold as the real thing.',
+        mood: 'grounded · dry · knowing',
+        concept: 'A taste-and-values track with a little edge and zero apology.',
+        src: './audio/05-not-that-kind-of-country.mp3',
+        art: './images/track-05-not-that-kind-of-country.svg',
+        tags: ['Grounded', 'Sharp', 'Authentic']
+      },
+      {
+        title: 'Weird Drops',
+        role: 'Interior listener track',
+        description: 'Not songs as résumé — fragments, textures, and strange little moments that hit before language does.',
+        mood: 'hypnotic · private · psychedelic',
+        concept: 'The ear leads the mind. Feeling first, explanation later.',
+        src: './audio/06-weird-drops.mp3',
+        art: './images/track-06-weird-drops.svg',
+        tags: ['Textural', 'Hypnotic', 'Abstract']
+      },
+      {
+        title: 'Playlist Too Long',
+        role: 'Penultimate self-summary',
+        description: 'A mosaic portrait built from records, years, chrome, humor, restraint, and the details he would never list in an interview.',
+        mood: 'warm · wry · intimate',
+        concept: 'His playlist explains him better than he ever would.',
+        src: './audio/07-playlist-too-long.mp3',
+        art: './images/track-07-playlist-too-long.svg',
+        tags: ['Mosaic', 'Wry', 'Intimate']
+      },
+      {
+        title: 'Retire in Spain',
+        role: 'Final destination',
+        description: 'Stone streets, sea air, sunlight, distance from noise — the earned exhale and final image the record was moving toward all along.',
+        mood: 'sun-faded · elegant · peaceful',
+        concept: 'A destination ending: not collapse, not twist, but release.',
+        src: './audio/08-retire-in-spain.mp3',
+        art: './images/track-08-retire-in-spain.svg',
+        tags: ['Coastal', 'Elegant', 'Release']
+      }
+    ];
+
+    const audio = document.getElementById('audio');
+    const playBtn = document.getElementById('play-btn');
+    const miniPlay = document.getElementById('mini-play');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const miniPrev = document.getElementById('mini-prev');
+    const miniNext = document.getElementById('mini-next');
+    const seek = document.getElementById('seek');
+    const currentTimeEl = document.getElementById('current-time');
+    const durationEl = document.getElementById('duration');
+    const nowTitle = document.getElementById('now-title');
+    const nowSubtitle = document.getElementById('now-subtitle');
+    const miniTitle = document.getElementById('mini-title');
+    const miniSub = document.getElementById('mini-sub');
+    const heroTrackNumber = document.getElementById('hero-track-number');
+    const heroTrackRole = document.getElementById('hero-track-role');
+    const heroTrackTitle = document.getElementById('hero-track-title');
+    const heroTrackDescription = document.getElementById('hero-track-description');
+    const heroTags = document.getElementById('hero-tags');
+    const trackListEl = document.getElementById('track-list');
+    const stickyMini = document.getElementById('sticky-mini');
+    const toast = document.getElementById('toast');
+    const installBtn = document.getElementById('install-btn');
+    const aboutBtn = document.getElementById('about-btn');
+    const aboutSheet = document.getElementById('about-sheet');
+    const closeAboutBtn = document.getElementById('close-about');
+    const sheetBackdrop = document.getElementById('sheet-backdrop');
+    const artLayerA = document.getElementById('art-layer-a');
+    const artLayerB = document.getElementById('art-layer-b');
+    const bgLayerA = document.getElementById('bg-layer-a');
+    const bgLayerB = document.getElementById('bg-layer-b');
+
+    let currentTrack = 0;
+    let deferredPrompt = null;
+    let artFront = true;
+    let bgFront = true;
+    let hasUserInteracted = false;
+
+    const visualizerCanvas = document.getElementById('visualizer');
+    const vCtx = visualizerCanvas.getContext('2d');
+    let audioCtx;
+    let analyser;
+    let sourceNode;
+    let dataArray;
+    let animationFrameId;
+    let visualizerScale = 1;
+
+    function formatTime(sec) {
+      if (!Number.isFinite(sec)) return '0:00';
+      const minutes = Math.floor(sec / 60);
+      const seconds = Math.floor(sec % 60).toString().padStart(2, '0');
+      return `${minutes}:${seconds}`;
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function saveState() {
+      const state = {
+        currentTrack,
+        currentTime: audio.currentTime || 0,
+        wasPlaying: !audio.paused && !audio.ended,
+        savedAt: Date.now()
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const state = JSON.parse(raw);
+        if (Number.isInteger(state.currentTrack) && state.currentTrack >= 0 && state.currentTrack < tracks.length) {
+          currentTrack = state.currentTrack;
+        }
+        return state;
+      } catch (err) {
+        console.warn('State restore failed', err);
+      }
+    }
+
+    function updateThemeArt(track) {
+      const nextArtLayer = artFront ? artLayerB : artLayerA;
+      const oldArtLayer = artFront ? artLayerA : artLayerB;
+      nextArtLayer.style.backgroundImage = `url('${track.art}')`;
+      nextArtLayer.classList.add('active');
+      oldArtLayer.classList.remove('active');
+      artFront = !artFront;
+
+      const nextBgLayer = bgFront ? bgLayerB : bgLayerA;
+      const oldBgLayer = bgFront ? bgLayerA : bgLayerB;
+      nextBgLayer.style.backgroundImage = `url('${track.art}')`;
+      nextBgLayer.classList.add('active');
+      oldBgLayer.classList.remove('active');
+      bgFront = !bgFront;
+    }
+
+    function updateHero(track, index) {
+      heroTrackNumber.textContent = `Track ${String(index + 1).padStart(2, '0')}`;
+      heroTrackRole.textContent = track.role;
+      heroTrackTitle.textContent = track.title;
+      heroTrackDescription.textContent = track.description;
+      heroTags.innerHTML = '';
+      [track.mood, ...track.tags].forEach((tagText) => {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = tagText;
+        heroTags.appendChild(tag);
+      });
+    }
+
+    function updatePlayerLabels(track, index) {
+      nowTitle.textContent = track.title;
+      nowSubtitle.textContent = `${track.role} · Track ${index + 1} of ${tracks.length}`;
+      miniTitle.textContent = track.title;
+      miniSub.textContent = `Track ${index + 1} of ${tracks.length}`;
+    }
+
+    function renderTrackList() {
+      trackListEl.innerHTML = '';
+      tracks.forEach((track, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'track-card';
+        btn.dataset.index = String(index);
+        btn.innerHTML = `
+          <div class="track-card-top">
+            <div style="display:flex; gap:12px; align-items:center; min-width:0;">
+              <span class="track-index">${String(index + 1).padStart(2, '0')}</span>
+              <div style="min-width:0;">
+                <h3 class="track-name">${track.title}</h3>
+                <div class="track-role">${track.role}</div>
+              </div>
+            </div>
+          </div>
+          <p>${track.description}</p>
+          <div class="track-footer">
+            <span>${track.mood}</span>
+            <span>•</span>
+            <span>${track.concept}</span>
+          </div>
+        `;
+        btn.addEventListener('click', async () => {
+          await setTrack(index, true, true);
+        });
+        trackListEl.appendChild(btn);
+      });
+      highlightTrack();
+    }
+
+    function highlightTrack() {
+      [...trackListEl.children].forEach((child, index) => {
+        child.classList.toggle('active', index === currentTrack);
+      });
+    }
+
+    async function initAudioContext() {
+      if (audioCtx) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      audioCtx = new AudioCtx();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.82;
+      sourceNode = audioCtx.createMediaElementSource(audio);
+      sourceNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      drawVisualizer();
+    }
+
+    function drawVisualizer() {
+      const canvas = visualizerCanvas;
+      const width = canvas.width / visualizerScale;
+      const height = canvas.height / visualizerScale;
+      vCtx.clearRect(0, 0, width, height);
+
+      const gradient = vCtx.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, 'rgba(135, 183, 255, 0.96)');
+      gradient.addColorStop(1, 'rgba(145, 255, 227, 0.92)');
+
+      const inactiveGradient = vCtx.createLinearGradient(0, 0, 0, height);
+      inactiveGradient.addColorStop(0, 'rgba(255,255,255,0.22)');
+      inactiveGradient.addColorStop(1, 'rgba(255,255,255,0.02)');
+
+      const render = () => {
+        vCtx.clearRect(0, 0, width, height);
+        vCtx.fillStyle = 'rgba(255,255,255,0.03)';
+        vCtx.fillRect(0, 0, width, height);
+
+        const bars = 44;
+        const gap = 10;
+        const totalGap = gap * (bars - 1);
+        const barWidth = (width - totalGap) / bars;
+
+        if (analyser && dataArray && !audio.paused) {
+          analyser.getByteFrequencyData(dataArray);
+        }
+
+        for (let i = 0; i < bars; i++) {
+          const sampleIndex = Math.min(dataArray ? Math.floor((i / bars) * dataArray.length) : 0, (dataArray?.length || 1) - 1);
+          const amplitude = dataArray ? dataArray[sampleIndex] / 255 : 0;
+          const eased = audio.paused ? 0.08 + Math.sin((performance.now() / 600) + i * 0.3) * 0.02 : Math.max(0.08, amplitude * 0.95);
+          const barHeight = Math.max(18, eased * (height - 28));
+          const x = i * (barWidth + gap);
+          const y = height - barHeight - 14;
+          const radius = Math.min(11, barWidth / 2);
+
+          vCtx.fillStyle = audio.paused ? inactiveGradient : gradient;
+          roundRect(vCtx, x, y, barWidth, barHeight, radius);
+          vCtx.fill();
+        }
+
+        animationFrameId = requestAnimationFrame(render);
+      };
+
+      cancelAnimationFrame(animationFrameId);
+      render();
+    }
+
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    function updatePlayButtons() {
+      const playing = !audio.paused && !audio.ended;
+      playBtn.textContent = playing ? 'Pause' : 'Play Album';
+      miniPlay.textContent = playing ? 'Pause' : 'Play';
+      stickyMini.hidden = false;
+    }
+
+    async function safePlay() {
+      try {
+        hasUserInteracted = true;
+        await initAudioContext();
+        if (audioCtx?.state === 'suspended') {
+          await audioCtx.resume();
+        }
+        await audio.play();
+        updatePlayButtons();
+        saveState();
+      } catch (err) {
+        console.warn('Playback start was blocked', err);
+        showToast('Tap play again to start audio on this device.');
+      }
+    }
+
+    async function setTrack(index, shouldPlay = false, shouldResetTime = false) {
+      currentTrack = (index + tracks.length) % tracks.length;
+      const track = tracks[currentTrack];
+      const previousTime = shouldResetTime ? 0 : (audio.currentTime || 0);
+      audio.src = track.src;
+      audio.load();
+      if (!shouldResetTime) {
+        audio.addEventListener('loadedmetadata', function restorePositionOnce() {
+          audio.currentTime = previousTime;
+          audio.removeEventListener('loadedmetadata', restorePositionOnce);
+        }, { once: true });
+      }
+      updateHero(track, currentTrack);
+      updatePlayerLabels(track, currentTrack);
+      updateThemeArt(track);
+      highlightTrack();
+      updateMediaSession();
+      saveState();
+      if (shouldPlay) {
+        await safePlay();
+      } else {
+        updatePlayButtons();
+      }
+    }
+
+    function updateSeek() {
+      const duration = audio.duration || 0;
+      const current = audio.currentTime || 0;
+      seek.value = duration ? ((current / duration) * 100).toString() : '0';
+      currentTimeEl.textContent = formatTime(current);
+      durationEl.textContent = formatTime(duration);
+      saveState();
+    }
+
+    function nextTrack(autoPlay = true) {
+      return setTrack(currentTrack + 1, autoPlay, true);
+    }
+
+    function prevTrack() {
+      if (audio.currentTime > 4) {
+        audio.currentTime = 0;
+        updateSeek();
+        return;
+      }
+      return setTrack(currentTrack - 1, !audio.paused, true);
+    }
+
+    function updateMediaSession() {
+      if (!('mediaSession' in navigator)) return;
+      const track = tracks[currentTrack];
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title,
+        artist: 'EchoVerse | An AeroVista Production',
+        album: 'Mad Mood Music',
+        artwork: [
+          { src: './images/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: './images/icon-512.png', sizes: '512x512', type: 'image/png' }
+        ]
+      });
+      navigator.mediaSession.setActionHandler('play', safePlay);
+      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
+      navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(true));
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime != null) {
+          audio.currentTime = details.seekTime;
+          updateSeek();
+        }
+      });
+    }
+
+    function openAbout() {
+      aboutSheet.classList.add('open');
+      sheetBackdrop.classList.add('open');
+      aboutSheet.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeAbout() {
+      aboutSheet.classList.remove('open');
+      sheetBackdrop.classList.remove('open');
+      aboutSheet.setAttribute('aria-hidden', 'true');
+    }
+
+    function handleInstallAvailability() {
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredPrompt = event;
+        installBtn.hidden = false;
+        installBtn.classList.add('install-ready');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredPrompt = null;
+        installBtn.hidden = true;
+        showToast('Installed. Mad Mood Music is ready from your home screen.');
+      });
+    }
+
+    async function promptInstall() {
+      if (!deferredPrompt) {
+        showToast('Use your browser menu to install this album if the prompt is not available.');
+        return;
+      }
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.hidden = true;
+    }
+
+    function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./service-worker.js').catch((err) => {
+            console.warn('Service worker registration failed', err);
+          });
+        });
+      }
+    }
+
+    function handleResize() {
+      const ratio = Math.min(2, window.devicePixelRatio || 1);
+      const rect = visualizerCanvas.getBoundingClientRect();
+      visualizerScale = ratio;
+      visualizerCanvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      visualizerCanvas.height = Math.max(1, Math.floor(rect.height * ratio));
+      vCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      drawVisualizer();
+    }
+
+    function hydrateFromState() {
+      const state = loadState();
+      setTrack(currentTrack, false, true).then(() => {
+        if (state?.currentTime) {
+          audio.addEventListener('loadedmetadata', function seekToSavedTime() {
+            audio.currentTime = Math.min(state.currentTime, audio.duration || state.currentTime);
+            updateSeek();
+            audio.removeEventListener('loadedmetadata', seekToSavedTime);
+          }, { once: true });
+        }
+        if (state?.wasPlaying) {
+          showToast('Tap play to resume where you left off.');
+        }
+      });
+    }
+
+    playBtn.addEventListener('click', async () => {
+      hasUserInteracted = true;
+      if (audio.paused) {
+        await safePlay();
+      } else {
+        audio.pause();
+      }
+      updatePlayButtons();
+    });
+
+    miniPlay.addEventListener('click', async () => {
+      hasUserInteracted = true;
+      if (audio.paused) {
+        await safePlay();
+      } else {
+        audio.pause();
+      }
+      updatePlayButtons();
+    });
+
+    [prevBtn, miniPrev].forEach((btn) => btn.addEventListener('click', () => prevTrack()));
+    [nextBtn, miniNext].forEach((btn) => btn.addEventListener('click', () => nextTrack(true)));
+
+    audio.addEventListener('timeupdate', updateSeek);
+    audio.addEventListener('loadedmetadata', updateSeek);
+    audio.addEventListener('play', () => {
+      updatePlayButtons();
+      updateMediaSession();
+      saveState();
+    });
+    audio.addEventListener('pause', () => {
+      updatePlayButtons();
+      saveState();
+    });
+    audio.addEventListener('ended', () => {
+      nextTrack(true);
+    });
+    audio.addEventListener('error', () => {
+      showToast('Track file not found yet. Drop the matching MP3 into ./audio.');
+    });
+
+    seek.addEventListener('input', () => {
+      if (!audio.duration) return;
+      const nextTime = (Number(seek.value) / 100) * audio.duration;
+      audio.currentTime = nextTime;
+      updateSeek();
+    });
+
+    aboutBtn.addEventListener('click', openAbout);
+    closeAboutBtn.addEventListener('click', closeAbout);
+    sheetBackdrop.addEventListener('click', closeAbout);
+    installBtn.addEventListener('click', promptInstall);
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        updateMediaSession();
+      }
+      saveState();
+    });
+
+    window.addEventListener('pagehide', saveState);
+    window.addEventListener('beforeunload', saveState);
+    window.addEventListener('resize', handleResize);
+
+    renderTrackList();
+    handleInstallAvailability();
+    registerServiceWorker();
+    hydrateFromState();
+    handleResize();
+    updatePlayButtons();
+    stickyMini.hidden = false;
+  </script>
+</body>
+</html>
