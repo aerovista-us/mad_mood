@@ -156,10 +156,37 @@
       display: none;
     }
 
+    .chip-btn {
+      opacity: 0.92;
+    }
+
+    .chip-btn.install-cta {
+      border-color: rgba(158, 183, 214, 0.22);
+      background: rgba(135, 183, 255, 0.08);
+      color: rgba(238, 243, 255, 0.95);
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
     .chip-btn.install-ready {
       border-color: rgba(145, 255, 227, 0.28);
-      background: rgba(145, 255, 227, 0.08);
+      background: linear-gradient(180deg, rgba(145, 255, 227, 0.16), rgba(135, 183, 255, 0.12));
       color: #dffff5;
+      box-shadow: 0 0 0 1px rgba(145, 255, 227, 0.2), 0 8px 22px rgba(0, 0, 0, 0.26);
+      animation: install-pulse 2.8s ease-in-out infinite;
+    }
+
+    .chip-btn.install-done {
+      border-color: rgba(145, 255, 227, 0.18);
+      background: rgba(145, 255, 227, 0.09);
+      color: rgba(223, 255, 245, 0.9);
+      cursor: default;
+      opacity: 0.8;
+    }
+
+    @keyframes install-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(145, 255, 227, 0.2), 0 8px 22px rgba(0, 0, 0, 0.22); }
+      50% { box-shadow: 0 0 0 2px rgba(145, 255, 227, 0.32), 0 10px 28px rgba(0, 0, 0, 0.3); }
     }
 
     .icon-btn {
@@ -705,7 +732,7 @@
         <h1 class="title">Mad Mood Music</h1>
         <div class="subtitle">Mobile-first album player · home-screen ready · art-led presentation</div>
       </div>
-      <button class="chip-btn" id="install-btn" hidden type="button">Install</button>
+      <button class="chip-btn install-cta" id="install-btn" type="button" aria-label="Install app">Install App</button>
       <button class="icon-btn" id="about-btn" type="button" aria-label="About this album">i</button>
     </header>
 
@@ -843,6 +870,14 @@
 
   <script>
     const STORAGE_KEY = 'echoverse.mad-mood-music.state.v1';
+    const AD_FREQUENCY_SONGS = 3;
+    const AD_FREQUENCY_SKIPS = 2;
+    const adTracks = [
+      './audio/ad1.mp3',
+      './audio/ad2.mp3',
+      './audio/ad3.mp3',
+      './audio/ad4.mp3'
+    ];
     const tracks = [
       {
         title: 'Mad Mood Music',
@@ -965,6 +1000,12 @@
     let hasUserInteracted = false;
     let currentDisplayedArt = '';
     const transitionedArtByTrack = new Set();
+    const pendingArtTransitions = new Set();
+    let pendingAdCount = 0;
+    let songsTowardAd = 0;
+    let skipsTowardAd = 0;
+    let isAdPlaying = false;
+    let lastAdIndex = -1;
 
     const visualizerCanvas = document.getElementById('visualizer');
     const vCtx = visualizerCanvas.getContext('2d');
@@ -1018,9 +1059,17 @@
       return svgArtPath.replace(/\.svg$/i, '.png');
     }
 
-    function setThemeLayers(artPath) {
+    function setThemeLayers(artPath, options = {}) {
+      const { durationMs = null } = options;
       const nextArtLayer = artFront ? artLayerB : artLayerA;
       const oldArtLayer = artFront ? artLayerA : artLayerB;
+      if (Number.isFinite(durationMs) && durationMs > 0) {
+        nextArtLayer.style.transition = `opacity ${durationMs}ms ease, transform ${durationMs}ms ease`;
+        oldArtLayer.style.transition = `opacity ${durationMs}ms ease, transform ${durationMs}ms ease`;
+      } else {
+        nextArtLayer.style.removeProperty('transition');
+        oldArtLayer.style.removeProperty('transition');
+      }
       nextArtLayer.style.backgroundImage = `url('${artPath}')`;
       nextArtLayer.classList.add('active');
       oldArtLayer.classList.remove('active');
@@ -1028,11 +1077,28 @@
 
       const nextBgLayer = bgFront ? bgLayerB : bgLayerA;
       const oldBgLayer = bgFront ? bgLayerA : bgLayerB;
+      if (Number.isFinite(durationMs) && durationMs > 0) {
+        nextBgLayer.style.transition = `opacity ${durationMs}ms ease, transform ${durationMs}ms ease, filter ${durationMs}ms ease`;
+        oldBgLayer.style.transition = `opacity ${durationMs}ms ease, transform ${durationMs}ms ease, filter ${durationMs}ms ease`;
+      } else {
+        nextBgLayer.style.removeProperty('transition');
+        oldBgLayer.style.removeProperty('transition');
+      }
       nextBgLayer.style.backgroundImage = `url('${artPath}')`;
       nextBgLayer.classList.add('active');
       oldBgLayer.classList.remove('active');
       bgFront = !bgFront;
       currentDisplayedArt = artPath;
+
+      if (Number.isFinite(durationMs) && durationMs > 0) {
+        const resetAfterMs = durationMs + 80;
+        setTimeout(() => {
+          nextArtLayer.style.removeProperty('transition');
+          oldArtLayer.style.removeProperty('transition');
+          nextBgLayer.style.removeProperty('transition');
+          oldBgLayer.style.removeProperty('transition');
+        }, resetAfterMs);
+      }
     }
 
     function updateThemeArt(track) {
@@ -1041,7 +1107,7 @@
 
     function transitionTrackArtToPng(index) {
       const track = tracks[index];
-      if (!track || transitionedArtByTrack.has(index)) return;
+      if (!track || transitionedArtByTrack.has(index) || pendingArtTransitions.has(index)) return;
       const pngArt = getPngArtPath(track.art);
       if (!pngArt || pngArt === track.art) return;
 
@@ -1052,11 +1118,22 @@
           transitionedArtByTrack.add(index);
           return;
         }
-        setThemeLayers(pngArt);
-        transitionedArtByTrack.add(index);
+        pendingArtTransitions.add(index);
+        // Wait 1.5s after playback starts, then fade in over 2.5s (full-on at ~4s).
+        setTimeout(() => {
+          pendingArtTransitions.delete(index);
+          if (currentTrack !== index) return;
+          if (currentDisplayedArt === pngArt) {
+            transitionedArtByTrack.add(index);
+            return;
+          }
+          setThemeLayers(pngArt, { durationMs: 2500 });
+          transitionedArtByTrack.add(index);
+        }, 1500);
       };
       probe.onerror = () => {
         // Keep SVG in place when a matching PNG is not available.
+        pendingArtTransitions.delete(index);
       };
       probe.src = pngArt;
     }
@@ -1222,9 +1299,78 @@
       }
     }
 
+    function enqueueSongBasedAds() {
+      songsTowardAd += 1;
+      while (songsTowardAd >= AD_FREQUENCY_SONGS) {
+        songsTowardAd -= AD_FREQUENCY_SONGS;
+        pendingAdCount += 1;
+      }
+    }
+
+    function enqueueSkipBasedAds() {
+      skipsTowardAd += 1;
+      while (skipsTowardAd >= AD_FREQUENCY_SKIPS) {
+        skipsTowardAd -= AD_FREQUENCY_SKIPS;
+        pendingAdCount += 1;
+      }
+    }
+
+    function pickNextAdIndex() {
+      if (!adTracks.length) return -1;
+      if (adTracks.length === 1) return 0;
+      let nextIndex = Math.floor(Math.random() * adTracks.length);
+      if (nextIndex === lastAdIndex) {
+        nextIndex = (nextIndex + 1 + Math.floor(Math.random() * (adTracks.length - 1))) % adTracks.length;
+      }
+      return nextIndex;
+    }
+
+    async function playSingleAd() {
+      const adIndex = pickNextAdIndex();
+      if (adIndex < 0) return;
+      const adSrc = adTracks[adIndex];
+      isAdPlaying = true;
+      nowTitle.textContent = 'Intermission';
+      nowSubtitle.textContent = 'Sponsored message';
+      miniTitle.textContent = 'Intermission';
+      miniSub.textContent = 'Sponsored message';
+
+      audio.src = adSrc;
+      audio.load();
+
+      await new Promise(async (resolve) => {
+        const finish = () => {
+          audio.removeEventListener('ended', onEnded);
+          audio.removeEventListener('error', onError);
+          lastAdIndex = adIndex;
+          isAdPlaying = false;
+          resolve();
+        };
+        const onEnded = () => finish();
+        const onError = () => finish();
+        audio.addEventListener('ended', onEnded, { once: true });
+        audio.addEventListener('error', onError, { once: true });
+        try {
+          await safePlay();
+        } catch (err) {
+          finish();
+        }
+      });
+    }
+
+    async function playQueuedAds() {
+      while (pendingAdCount > 0) {
+        pendingAdCount -= 1;
+        await playSingleAd();
+      }
+    }
+
     async function setTrack(index, shouldPlay = false, shouldResetTime = false) {
       currentTrack = (index + tracks.length) % tracks.length;
       const track = tracks[currentTrack];
+      if (shouldPlay && pendingAdCount > 0) {
+        await playQueuedAds();
+      }
       const previousTime = shouldResetTime ? 0 : (audio.currentTime || 0);
       audio.src = track.src;
       audio.load();
@@ -1256,15 +1402,21 @@
       saveState();
     }
 
-    function nextTrack(autoPlay = true) {
+    function nextTrack(autoPlay = true, reason = 'auto') {
+      if (reason === 'skip') {
+        enqueueSkipBasedAds();
+      }
       return setTrack(currentTrack + 1, autoPlay, true);
     }
 
-    function prevTrack() {
+    function prevTrack(reason = 'skip') {
       if (audio.currentTime > 4) {
         audio.currentTime = 0;
         updateSeek();
         return;
+      }
+      if (reason === 'skip') {
+        enqueueSkipBasedAds();
       }
       return setTrack(currentTrack - 1, !audio.paused, true);
     }
@@ -1283,8 +1435,8 @@
       });
       navigator.mediaSession.setActionHandler('play', safePlay);
       navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
-      navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(true));
+      navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack('skip'));
+      navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack(true, 'skip'));
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime != null) {
           audio.currentTime = details.seekTime;
@@ -1306,29 +1458,42 @@
     }
 
     function handleInstallAvailability() {
+      installBtn.hidden = false;
+      installBtn.classList.add('install-cta');
+      installBtn.classList.remove('install-ready', 'install-done');
+      installBtn.textContent = 'Install App';
+
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
         deferredPrompt = event;
         installBtn.hidden = false;
+        installBtn.classList.add('install-cta');
         installBtn.classList.add('install-ready');
+        installBtn.classList.remove('install-done');
+        installBtn.textContent = 'Install App';
       });
 
       window.addEventListener('appinstalled', () => {
         deferredPrompt = null;
-        installBtn.hidden = true;
+        installBtn.classList.remove('install-ready');
+        installBtn.classList.add('install-done');
+        installBtn.textContent = 'Installed';
         showToast('Installed. Mad Mood Music is ready from your home screen.');
       });
     }
 
     async function promptInstall() {
+      if (installBtn.classList.contains('install-done')) return;
       if (!deferredPrompt) {
-        showToast('Use your browser menu to install this album if the prompt is not available.');
+        showToast('Use your browser share/menu options to add this app to your home screen.');
         return;
       }
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+      const choice = await deferredPrompt.userChoice;
       deferredPrompt = null;
-      installBtn.hidden = true;
+      if (choice?.outcome !== 'accepted') {
+        installBtn.classList.remove('install-ready');
+      }
     }
 
     function registerServiceWorker() {
@@ -1387,8 +1552,8 @@
       updatePlayButtons();
     });
 
-    [prevBtn, miniPrev].forEach((btn) => btn.addEventListener('click', () => prevTrack()));
-    [nextBtn, miniNext].forEach((btn) => btn.addEventListener('click', () => nextTrack(true)));
+    [prevBtn, miniPrev].forEach((btn) => btn.addEventListener('click', () => prevTrack('skip')));
+    [nextBtn, miniNext].forEach((btn) => btn.addEventListener('click', () => nextTrack(true, 'skip')));
 
     audio.addEventListener('timeupdate', updateSeek);
     audio.addEventListener('loadedmetadata', updateSeek);
@@ -1403,9 +1568,15 @@
       saveState();
     });
     audio.addEventListener('ended', () => {
-      nextTrack(true);
+      if (isAdPlaying) return;
+      enqueueSongBasedAds();
+      nextTrack(true, 'auto');
     });
     audio.addEventListener('error', () => {
+      if (isAdPlaying) {
+        showToast('Ad audio is unavailable. Returning to the album.');
+        return;
+      }
       showToast('This track is unavailable right now. Please try another song.');
     });
 
